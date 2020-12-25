@@ -1,0 +1,266 @@
+import pygame as pg
+
+pg.init()
+import random
+import neat
+import os
+
+
+# Class for creating birds
+class Bird:
+
+    # A bird has its starting location (x, y), velocity and image
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.velocity = -3
+        self.image = pg.image.load("b1.png")
+
+    # One of three pictures of a bird is drawn depending on the value of tickCounter
+    # When called in the mainloop, picture is changed every 5 ticks and it looks like the bird is flapping its wings
+    # Birds are also rotated
+    def draw(self):
+        birdPics = [pg.image.load("b1.png"), pg.image.load("b2.png"), pg.image.load("b3.png"), pg.image.load("b2.png")]
+        birdNumber = 0
+
+        if tickCounter < 5:
+            birdNumber = 0
+        elif tickCounter < 10:
+            birdNumber = 1
+        elif tickCounter < 15:
+            birdNumber = 2
+        elif tickCounter < 20:
+            birdNumber = 1
+
+        screen.blit(self.rotate(birdPics[birdNumber]), (self.x, self.y))
+
+    # When fall is called, a bird's velocity decreases
+    def fall(self):
+        self.velocity -= 1.5
+
+    # When flap is called, a bird's velocity increases
+    def flap(self):
+        if self.velocity < 0:
+            self.velocity = 0
+        self.velocity += 10
+
+    # When move is called, fall is also called. Velocity can't exceed bird's min or max velocities.
+    def move(self):
+        minVel = -8
+        maxVel = 10
+        self.fall()
+        if self.velocity < -9:
+            self.velocity = minVel
+        elif self.velocity > 12:
+            self.velocity = maxVel
+        self.y -= self.velocity
+
+    # When rotate is called, birdPic is rotated. The angle depends on bird's velocity.
+    def rotate(self, birdPic):
+        rotatedBirdPic = pg.transform.rotozoom(birdPic, self.velocity * 3, 1)
+        return rotatedBirdPic
+
+# Class for creating pipes
+class Pipe():
+
+    # A pipe has its location (x coordinate), and height (y coordinate), that is randomly selected between 250 and 350
+    # Gap is the distance between upper and lower pipes
+    def __init__(self, location):
+        self.location = location
+        self.height = random.randrange(200, 350, 50)
+        self.image = pg.image.load("pipe.png")
+        self.gap = 125
+
+    # If a pipe hasn't completely passed the left side of the screen, it moves left
+    # Else pipe is moved to the right side and it gets new height
+    def move(self):
+        if self.location + self.image.get_width() >= 0:
+            self.location -= 5
+        else:
+            self.location += width + 2 * self.image.get_width()
+            self.height = random.randrange(200, 350, 50)
+
+    # When draw is called the lower pipe is drawn
+    # The picture of a pipe is rotated 180 degrees and upper pipe is drawn above the lower pipe
+    def draw(self):
+        screen.blit(self.image, (self.location, self.height))
+        screen.blit((pg.transform.rotate(self.image, 180)), (self.location, self.height - self.image.get_height() - self.gap))
+
+
+# Draws two pictures of ground that move left. There are two pictures for filling the screen at all times.
+def drawGround():
+    ground = pg.image.load("ground.png")
+    screen.blit(ground, ((0 - tickCounter * 5), 400))
+    screen.blit(ground, ((ground.get_width() - tickCounter * 5), 400))
+
+# Draws background
+def drawBackground():
+    background = pg.image.load("bg.png")
+    screen.blit(background, (0, 0))
+
+
+# Variables for keeping score on generation, score and remaining birds of a generation
+gen = 0
+score = 0
+alive = 0
+
+# Draws counters for score, birds and generation
+def drawCounters():
+    font = pg.font.Font(None, 32)
+    color = (0, 0, 255)
+
+    genX = 80
+    genY = 470
+    genCounter = font.render("Generation: " + str(gen), True, color)
+    screen.blit(genCounter, (genX, genY))
+
+    scoreX = 80
+    scoreY = 430
+    scoreCounter = font.render("Score: " + str(score), True, color)
+    screen.blit(scoreCounter, (scoreX, scoreY))
+
+    birdsX = 80
+    birdsY = 450
+    birdsCounter = font.render("Birds alive: " + str(alive), True, color)
+    screen.blit(birdsCounter, (birdsX, birdsY))
+
+# Main function for running the game
+def main(genomes, config):
+    global width, height, screen, tickCounter, gen, score, alive
+
+    # Resets score and adds one to generation
+    score = 0
+    gen += 1
+
+    # Creates lists for nets, birds, and genomes
+    nets = []
+    birds = []
+    ge = []
+
+    # Creates screen for the game and sets caption and icon
+    width = 280
+    height = 500
+    screen = pg.display.set_mode((width, height))
+    pg.display.set_caption('Flappy Bird')
+    pg.display.set_icon(pg.image.load('b1.png'))
+
+    # Creates clock and tickCounter for setting fps and tracking time
+    clock = pg.time.Clock()
+    tickCounter = 0
+
+    # Creates two pipes of the game
+    pipes = [Pipe(width + 52), Pipe(width + 52 + 200)]
+
+    # Creates a net and a bird for each genome in genomes
+    for i, genome in genomes:
+        genome.fitness = 0
+        net = neat.nn.FeedForwardNetwork.create(genome, config)
+        nets.append(net)
+        birds.append(Bird(30, 100))
+        ge.append(genome)
+
+    # Draws birds, pipes, ground, background and counters
+    def drawAll():
+        drawBackground()
+        for pipe in pipes:
+            pipe.draw()
+        for bird in birds:
+            bird.draw()
+        drawGround()
+        drawCounters()
+
+    # Checks if any bird has passed any pipe
+    def checkIfPassed(bird: Bird):
+        for pipe in pipes:
+            for bird in birds:
+                # A bird passes a pipe, when its x coordinate is greater than pipe's x coordinate + pipe image width
+                # The distance will be 5 or smaller, depending on pipe image width, as pipes move 5 pixels per tick
+              if 0 < bird.x - (pipe.location + pipe.image.get_width()) <= 5:
+                    return True
+
+    # Checks if a bird has hit a pipe or ground
+    def checkIfHit(bird: Bird):
+        for pipe in pipes:
+                # If a bird's image touches a pipe's image, decreases fitness and returns true
+                if pipe.location - bird.image.get_width() <= bird.x <= pipe.location + pipe.image.get_width():
+                    if bird.y + bird.image.get_height() >= pipe.height:
+                        ge[i].fitness -= 1
+                        return True
+                    elif bird.y <= pipe.height - pipe.gap:
+                        ge[i].fitness -= 1
+                        return True
+                # If bird's image touches ground's image, decreases fitness and returns true
+                if bird.y + bird.image.get_height() >= 400:
+                    ge[i].fitness -= 1
+                    return True
+
+    nextPipe = 0
+
+    # Loop for running the game
+    running = True
+    while running:
+
+        clock.tick(30)
+        drawAll()
+
+        for bird in birds:
+            bird.move()
+            output = nets[birds.index(bird)].activate((bird.y, abs(bird.y - pipes[nextPipe].height), abs(bird.y - pipes[nextPipe].height - pipes[nextPipe].gap)))
+            if output[0] > 0.5:
+                bird.flap()
+
+        if len(birds) > 0:
+            if pipes[1].location + pipes[1].image.get_width() >= birds[0].x:
+                if abs(pipes[1].location - birds[0].x) < abs(pipes[0].location - birds[0].x):
+                    nextPipe = 1
+            else:
+                nextPipe = 0
+        else:
+            running = False
+
+        for i, bird in enumerate(birds):
+            if checkIfHit(bird):
+                nets.pop(i)
+                ge.pop(i)
+                birds.pop(i)
+
+        # When birds pass a pipe, one point is added to score and bird's fitness raises
+        if len(birds) > 0:
+            if checkIfPassed(birds[0]):
+                score += 1
+                for i in range(len(birds)):
+                    ge[i].fitness += 4
+
+        # Gives fitness for staying alive
+        for i in range(len(birds)):
+            ge[i].fitness += 0.1
+
+        # Moves pipes
+        for pipe in pipes:
+            pipe.move()
+
+        alive = len(birds)
+        pg.display.update()
+
+        # Adds 1 to tick counter and resets it when 20 is reached
+        tickCounter += 1
+        if tickCounter == 20:
+            tickCounter = 0
+
+        # Quits when x is clicked
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
+                running = False
+                pg.quit()
+                quit()
+
+def run(configPath):
+    config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, configPath)
+    population = neat.Population(config)
+    winner = population.run(main, 100)
+    print('\nBest genome:\n{!s}'.format(winner))
+
+
+if __name__ == "__main__":
+    configPath = os.path.join(os.path.dirname(__file__), 'neatconfiguration.txt')
+    run(configPath)
