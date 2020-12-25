@@ -203,6 +203,8 @@ def main(genomes, config):
         clock.tick(30)
         drawAll()
 
+        # Gives information about bird's and pipes' y-coordinates for the network
+        # If output is greates thatn 0.5, bird flaps
         for bird in birds:
             bird.move()
             output = nets[birds.index(bird)].activate((bird.y, abs(bird.y - pipes[nextPipe].height), abs(bird.y - pipes[nextPipe].height - pipes[nextPipe].gap)))
@@ -218,6 +220,7 @@ def main(genomes, config):
         else:
             running = False
 
+        # If a bird hits a pipe or ground, it's removed
         for i, bird in enumerate(birds):
             if checkIfHit(bird):
                 nets.pop(i)
@@ -254,6 +257,7 @@ def main(genomes, config):
                 pg.quit()
                 quit()
 
+# Runs mainloop 100 times, with the values from configuration file
 def run(configPath):
     config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, configPath)
     population = neat.Population(config)
